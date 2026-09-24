@@ -4,7 +4,7 @@ A pixel-art pomodoro timer for Windows. A plant grows in its pot while you focus
 
 ## Run it
 
-Double-click `release\PomodoroGarden.exe`. You don't need to install anything; it runs on Windows 10 and 11 as they come.
+Download `PomodoroGarden.exe` from the [latest release](https://github.com/Fabricio-Ramirez/PomodoroGarden-Claude-/releases/latest) and double-click it. You don't need to install anything; it runs on Windows 10 and 11 as they come.
 
 - **START / PAUSE**: the big button, or the **Space** key
 - **↻**: resets the current timer. **▶|** skips to the next one.
@@ -21,3 +21,5 @@ Settings and today's garden are saved in `PomodoroGarden.ini` next to the .exe. 
 ## Build
 
 Run `build.cmd`. It uses the C# compiler that ships with Windows (.NET Framework 4.x), so there's nothing to install. The source is in `src/`. `tools/DevTool.cs` is a helper that isn't shipped: it renders preview images, generates `assets/app.ico`, and runs a timer-rules test.
+
+GitHub Actions also builds the app on Windows for every push and runs the timer-rules test. You can download the `.exe` from the run's **Artifacts** section on the Actions tab. To publish a release, push a version tag (for example `git tag v1.1.0 && git push origin v1.1.0`) and the workflow attaches the `.exe` to a new GitHub Release.
