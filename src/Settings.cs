@@ -9,7 +9,8 @@ namespace PomodoroGarden
     {
         public int Focus = 25, Short = 5, Long = 15, Rounds = 4, Scale = 0;
         public bool Sound = true, AutoStart = false, OnTop = false, Dark = true;
-        public int Plant = Plants.Surprise;   // which plant to grow, or a different one every round
+        public int Plant = Plants.Surprise;
+        public int Weather = PomodoroGarden.Weather.Daily; // weather outside, or a different one every day   // which plant to grow, or a different one every round
         public string Spotify = "";           // optional Spotify link (playlist, album...) for the music button
         public int X = int.MinValue, Y = int.MinValue;
         public string Day = "";
@@ -48,6 +49,7 @@ namespace PomodoroGarden
                             case "autostart": s.AutoStart = val == "1"; break;
                             case "ontop": s.OnTop = val == "1"; break;
                             case "dark": s.Dark = val == "1"; break;
+                            case "weather": s.Weather = PomodoroGarden.Weather.ParseChoice(val.ToLowerInvariant()); break;
                             case "plant": s.Plant = Plants.ParseChoice(val.ToLowerInvariant()); break;
                             case "spotify": s.Spotify = val; break;
                             case "x": if (isNum) s.X = n; break;
@@ -90,6 +92,7 @@ namespace PomodoroGarden
                     "ontop=" + (OnTop ? 1 : 0),
                     "dark=" + (Dark ? 1 : 0),
                     "plant=" + Plants.KeyOf(Plant),
+                    "weather=" + PomodoroGarden.Weather.KeyOf(Weather),
                     "; paste a Spotify playlist or album link here to open it with the music button",
                     "spotify=" + Spotify,
                     "scale=" + Scale,

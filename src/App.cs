@@ -193,6 +193,7 @@ namespace PomodoroGarden
         // Skipping never counts as a finished round.
         void Skip()
         {
+            if (Cfg.Sound) Chiptune.Pop();
             if (Mode == Mode.Focus)
             {
                 BreakPlant = Progress;
