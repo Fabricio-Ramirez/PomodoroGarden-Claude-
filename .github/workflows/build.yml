@@ -65,7 +65,7 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           # Release notes: the "What's new" section of the README.
-          awk '/^## What.s new/{on=1;next} /^## /{on=0} on' README.md > notes.md
+          awk '/^## /{if (on) exit} /^## What.s new/{on=1; next} on' README.md > notes.md
 
       - uses: actions/download-artifact@v4
         if: steps.tag.outputs.tag != ''

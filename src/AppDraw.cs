@@ -204,10 +204,12 @@ namespace PomodoroGarden
             c.VLine(SX - 2, SY - 2, SH + 4, Pal.WoodLight);
             c.Rect(SX - 1, SY - 1, SW + 2, SH + 2, Pal.WoodDark);
 
+            AddHot("view", SX, SY, SW, SH - 8, null, Weather.Hint(TodaysWeather));
             c.Clip(SX, SY, SW, SH);
             if (Mode == Mode.Focus) DrawDay(c);
             else if (Mode == Mode.ShortBreak) DrawSunset(c);
             else DrawNight(c);
+            DrawWeather(c);
             if (T.DimScene) c.Dim(SX, SY, SW, SH);
 
             int sill = SY + SH - 8;
@@ -236,14 +238,17 @@ namespace PomodoroGarden
         {
             for (int x = SX; x < SX + SW; x++)
             {
-                int hb = SY + 60 + (int)Math.Round(4 * Math.Sin(x * 0.06 + 0.8) + 2 * Math.Sin(x * 0.17));
+                int hb = HillBack(x);
                 c.VLine(x, hb, SY + SH - hb, back);
                 c.Set(x, hb, backTop);
-                int hf = SY + 70 + (int)Math.Round(3 * Math.Sin(x * 0.09 + 2.1) + 1.5 * Math.Sin(x * 0.23 + 1));
+                int hf = HillFront(x);
                 c.VLine(x, hf, SY + SH - hf, front);
                 c.Set(x, hf, frontTop);
             }
         }
+
+        static int HillBack(int x) { return SY + 60 + (int)Math.Round(4 * Math.Sin(x * 0.06 + 0.8) + 2 * Math.Sin(x * 0.17)); }
+        static int HillFront(int x) { return SY + 70 + (int)Math.Round(3 * Math.Sin(x * 0.09 + 2.1) + 1.5 * Math.Sin(x * 0.23 + 1)); }
 
         void Cloud(Canvas c, string[] sprite, double offset, int y, double speed, int light, int shade)
         {
@@ -355,7 +360,7 @@ namespace PomodoroGarden
         void DrawSettings(Canvas c)
         {
             SettingsTabButton(c, "tab-timer", 0, 28, "TIMER", "TIMER LENGTHS AND SOUND");
-            SettingsTabButton(c, "tab-look", 1, 82, "LOOK", "PLANT, DARK MODE, MUSIC");
+            SettingsTabButton(c, "tab-look", 1, 82, "LOOK", "PLANT, THEME, WEATHER, MUSIC");
             if (SettingsTab == 0) DrawTimerSettings(c); else DrawLookSettings(c);
 
             int o = Button(c, "done", 50, 188, 60, 16, Pal.Green, Pal.GreenHover, Pal.Lime, Pal.Teal, ToggleSettings, "BACK TO THE TIMER  (ESC)", false);
@@ -409,13 +414,33 @@ namespace PomodoroGarden
             Toggle(c, "dark", 87, "DARK MODE", Cfg.Dark, () => Cfg.Dark = !Cfg.Dark, "EASY ON THE EYES AT NIGHT");
             Toggle(c, "top", 100, "ALWAYS ON TOP", Cfg.OnTop, TogglePin, "KEEP ABOVE OTHER WINDOWS");
             Stepper(c, "size", 113, "WINDOW SIZE", () => Cfg.Scale, v => { Cfg.Scale = v; host.ApplyScale(v); }, 1, Math.Max(1, host.MaxScale), "X", false, "ZOOM OF THIS WINDOW");
+            WeatherPicker(c, 126);
 
-            c.Text("MUSIC", 8, 130, T.Muted);
-            c.Text("SPOTIFY", 8, 141, T.Text);
-            int o = Button(c, "spotify", 111, 139, 41, 12, Pal.Spotify, unchecked((int)0xFF3BD16F), Pal.Lime, Pal.Teal,
+            c.Text("MUSIC", 8, 143, T.Muted);
+            c.Text("SPOTIFY", 8, 154, T.Text);
+            int o = Button(c, "spotify", 111, 152, 41, 12, Pal.Spotify, unchecked((int)0xFF3BD16F), Pal.Lime, Pal.Teal,
                            OpenSpotify, string.IsNullOrEmpty(Cfg.Spotify) ? "OPEN THE SPOTIFY APP" : "OPEN YOUR SAVED PLAYLIST", false);
-            c.TextIn("OPEN", 111, 41, 142 + o, Pal.Teal);
-            c.TextIn("OPEN", 111, 41, 141 + o, Pal.White);
+            c.TextIn("OPEN", 111, 41, 155 + o, Pal.Teal);
+            c.TextIn("OPEN", 111, 41, 154 + o, Pal.White);
+        }
+
+        // Weather: DAILY (random each day) or one fixed kind. Click or scroll to change.
+        void WeatherPicker(Canvas c, int y)
+        {
+            Action<int> change = d =>
+            {
+                int n = Weather.Count + 1; // DAILY plus every kind
+                int i = (Cfg.Weather + 1 + d + n) % n;
+                Cfg.Weather = i - 1;
+            };
+            string hint = Cfg.Weather == Weather.Daily ? "NEW WEATHER EVERY DAY" : "ALWAYS " + Weather.Names[Cfg.Weather];
+            AddHot("weather-row", 4, y, 84, 12, () => change(1), hint).Wheel = change;
+            c.Text("WEATHER", 8, y + 2, T.Text);
+            int o = NeutralButton(c, "weather-", 89, y, 11, 12, () => change(-1), hint, false);
+            c.Mask(Art.IconMinus, 92, y + 3 + o, T.Text);
+            c.TextIn(Weather.NameOf(Cfg.Weather), 100, 41, y + 2, Pal.Yellow);
+            o = NeutralButton(c, "weather+", 141, y, 11, 12, () => change(1), hint, false);
+            c.Mask(Art.IconPlus, 144, y + 3 + o, T.Text);
         }
 
         void PlantTile(Canvas c, string id, int x, int y, int choice)

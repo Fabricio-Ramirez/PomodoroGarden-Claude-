@@ -74,6 +74,8 @@ namespace PomodoroGarden
             SpotifyTests(check);
             SettingsFileTests(check);
             ClickTests(check);
+            SoundTests(check);
+            WeatherTests(check);
 
             Console.WriteLine(failures == 0 ? "cycle test: all passed" : "cycle test: " + failures + " failed");
             return failures == 0 ? 0 : 1;
@@ -224,12 +226,108 @@ namespace PomodoroGarden
             check("done closes settings", !app.InSettings);
         }
 
+        // ---- version 2.1: sounds and weather ----
+
+        static void SoundTests(Action<string, bool> check)
+        {
+            Chiptune.Init();
+            byte[] wav = Chiptune.BloomWav;
+            bool header = wav != null && wav.Length > 44 && System.Text.Encoding.ASCII.GetString(wav, 0, 4) == "RIFF"
+                && BitConverter.ToInt32(wav, 4) == wav.Length - 8 && System.Text.Encoding.ASCII.GetString(wav, 8, 4) == "WAVE";
+            check("sounds are valid WAV data", header);
+            int loud = 0;
+            for (int i = 44; i + 1 < wav.Length; i += 2) loud = Math.Max(loud, Math.Abs((int)BitConverter.ToInt16(wav, i)));
+            check("sounds are audible and don't clip", loud > 8000 && loud < 32000);
+
+            var cfg = new Settings { Rounds = 2, Sound = true };
+            var app = new App(cfg, new NullHost());
+            Action finish = () => { app.DebugState(app.Mode, RunState.Running, 1.0); app.Update(1); };
+            Chiptune.Log.Clear();
+            app.Key(System.Windows.Forms.Keys.Space);
+            check("pressing start plays the start sound", Chiptune.Log.Count == 1 && Chiptune.Log[0] == "pop");
+            Chiptune.Log.Clear();
+            finish();
+            check("end of focus plays the bloom jingle", Chiptune.Log.Count == 1 && Chiptune.Log[0] == "bloom");
+            Console.WriteLine("  Windows PlaySound accepted the jingle: " + (Chiptune.LastPlayWorked ? "yes" : "no (no audio device or not Windows)"));
+            Chiptune.Log.Clear();
+            finish();
+            check("end of a break plays the wake-up jingle", Chiptune.Log.Count == 1 && Chiptune.Log[0] == "wake");
+            Chiptune.Log.Clear();
+            finish(); finish();
+            check("end of the long break plays too", Chiptune.Log.Count == 2 && Chiptune.Log[1] == "wake");
+            Chiptune.Log.Clear();
+            var c = new Canvas(App.W, App.H);
+            Click(app, c, "skip");
+            check("skip gives a click sound", Chiptune.Log.Count == 1 && Chiptune.Log[0] == "pop");
+            cfg.AutoStart = true;
+            Chiptune.Log.Clear();
+            app.DebugState(Mode.Focus, RunState.Running, 1.0); app.Update(1);
+            check("with auto-start the jingle still plays", Chiptune.Log.Count == 1 && Chiptune.Log[0] == "bloom");
+            cfg.Sound = false;
+            Chiptune.Log.Clear();
+            finish(); app.Key(System.Windows.Forms.Keys.Space); Click(app, c, "skip");
+            check("sound off means silence", Chiptune.Log.Count == 0);
+        }
+
+        static void WeatherTests(Action<string, bool> check)
+        {
+            var seen = new int[Weather.Count];
+            var start = new DateTime(2026, 1, 1);
+            for (int d = 0; d < 365; d++) seen[Weather.ForDay(start.AddDays(d))]++;
+            bool all = true;
+            foreach (int n in seen) if (n < 10) all = false;
+            Console.WriteLine("  weather over a year: " + string.Join(", ", Array.ConvertAll(new[] { 0, 1, 2, 3, 4, 5 }, i => Weather.Names[i] + " " + seen[i])));
+            check("every kind of weather happens during a year", all);
+            check("weather stays the same all day", Weather.ForDay(new DateTime(2026, 9, 24)) == Weather.ForDay(new DateTime(2026, 9, 24, 23, 0, 0).Date));
+            check("weather names parse", Weather.ParseChoice("snow") == Weather.Snow && Weather.ParseChoice("x") == Weather.Daily
+                && Weather.ParseChoice(Weather.KeyOf(Weather.Fog)) == Weather.Fog && Weather.KeyOf(Weather.Daily) == "daily");
+
+            var cfg = new Settings { Weather = Weather.Storm };
+            cfg.Save();
+            check("weather choice is saved", Settings.Load().Weather == Weather.Storm);
+            File.Delete(Settings.FilePath);
+            File.WriteAllLines(Settings.FilePath, new[] { "focus=25" });
+            check("older settings get daily weather", Settings.Load().Weather == Weather.Daily);
+            File.Delete(Settings.FilePath);
+
+            var app = new App(new Settings { Sound = false }, new NullHost());
+            var c = new Canvas(App.W, App.H);
+            Click(app, c, "gear"); Click(app, c, "tab-look");
+            Click(app, c, "weather+");
+            check("weather + picks clear", app.Cfg.Weather == Weather.Clear && app.TodaysWeather == Weather.Clear);
+            Click(app, c, "weather+"); Click(app, c, "weather+"); Click(app, c, "weather+");
+            check("weather + steps through the kinds", app.Cfg.Weather == Weather.Snow);
+            Click(app, c, "weather-");
+            check("weather - steps back", app.Cfg.Weather == Weather.Rain);
+            for (int i = 0; i < 4; i++) Click(app, c, "weather+");
+            check("weather wraps round to daily", app.Cfg.Weather == Weather.Daily);
+
+            // Every weather in every scene and both themes draws without touching the sill or pot.
+            bool potClean = true;
+            var clean = new Canvas(App.W, App.H);
+            app.InSettings = false;
+            foreach (Mode m in new[] { Mode.Focus, Mode.ShortBreak, Mode.LongBreak })
+                for (int w = -1; w < Weather.Count; w++)
+                    for (int t = 0; t < 40; t++)
+                    {
+                        app.Cfg.Weather = w < 0 ? Weather.Clear : w;
+                        app.DebugState(m, RunState.Idle, 0);
+                        app.Now = t * 0.173;
+                        app.Render(w < 0 ? clean : c);
+                        if (w < 0) continue;
+                        for (int y = 112; y < 120; y++) // the sill and pot rows
+                            for (int x = 8; x < 152; x++)
+                                if (c.Get(x, y) != clean.Get(x, y)) potClean = false;
+                    }
+            check("weather stays outside the window", potClean);
+        }
+
         // ---- previews ----
 
         static void Previews(string dir)
         {
             Directory.CreateDirectory(dir);
-            var cfg = new Settings { Scale = 3, Dark = false, Plant = Plants.Daisy };
+            var cfg = new Settings { Scale = 3, Dark = false, Plant = Plants.Daisy, Weather = Weather.Clear };
             cfg.Day = DateTime.Now.ToString("yyyy-MM-dd");
             var app = new App(cfg, new NullHost());
             var c = new Canvas(App.W, App.H);
@@ -272,6 +370,17 @@ namespace PomodoroGarden
                 Shot(app, c, dir, "2" + sp + "_dark_" + Plants.Keys[sp], modes[sp], modes[sp] == Mode.Focus ? RunState.Running : RunState.Idle,
                      modes[sp] == Mode.Focus ? (sp == 0 ? 1.0 : 0.6 + sp * 0.07) : 0, 2.3);
             }
+            // Every weather, in a mix of scenes, both themes.
+            Mode[] wModes = { Mode.Focus, Mode.Focus, Mode.ShortBreak, Mode.Focus, Mode.LongBreak, Mode.Focus };
+            for (int w = 0; w < Weather.Count; w++)
+                foreach (bool dark in new[] { false, true })
+                {
+                    cfg.Weather = w; cfg.Dark = dark;
+                    app.PlantCode = Plants.Code(w % Plants.Count, 0);
+                    Shot(app, c, dir, "4" + w + (dark ? "d" : "c") + "_weather_" + Weather.Keys[w], wModes[w],
+                         wModes[w] == Mode.Focus ? RunState.Running : RunState.Idle, 0.8, w == Weather.Storm ? 13.05 : 3.3);
+                }
+            cfg.Weather = Weather.Clear; cfg.Dark = true;
             app.InSettings = true; app.SettingsTab = 1; app.HoverId = "music";
             Shot(app, c, dir, "30_dark_settings_look", Mode.Focus, RunState.Idle, 0, 1);
             app.SettingsTab = 0; app.HoverId = null;

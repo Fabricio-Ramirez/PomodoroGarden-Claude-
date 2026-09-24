@@ -2,6 +2,11 @@
 
 A pixel-art pomodoro timer for Windows. A plant grows in its pot while you focus and blooms when the round ends. Each bloom goes on your "today's garden" shelf.
 
+## What's new in 2.1
+
+- **Sounds fixed**: the jingles at the end of a focus round and of a break now play reliably. They're a little louder, and if Windows can't play them you hear the standard Windows chime instead. Skipping a timer gives a short click.
+- **Weather**: every day brings its own weather outside the window: clear, cloudy, rain, snow (with snowy hills), storm (with lightning) or fog, all in pixel art. Hover the window to see today's forecast. To pick one yourself, use **⚙ → LOOK → WEATHER**.
+
 ## What's new in 2.0
 
 - **Choose your plant**: daisy, rose, tulip, sunflower, little tree, cactus, or *surprise me* for a different one every round. Each comes in several colours (the tree grows apples, oranges, lemons or blossoms).
@@ -15,11 +20,11 @@ Download `PomodoroGarden.exe` from the [latest release](https://github.com/Fabri
 - **START / PAUSE**: the big button, or the **Space** key
 - **↻**: resets the current timer. **▶|** skips to the next one.
 - **♫** (top right): opens Spotify
-- **⚙** (top right): opens settings. The **TIMER** tab has focus, short break and long break minutes, how many rounds come before a long break, quick presets (25/5, 50/10, 90/20), sound and auto-start. The **LOOK** tab has the plant picker, dark mode, always on top, window size and a Spotify button. The **←/→** keys switch tabs.
+- **⚙** (top right): opens settings. The **TIMER** tab has focus, short break and long break minutes, how many rounds come before a long break, quick presets (25/5, 50/10, 90/20), sound and auto-start. The **LOOK** tab has the plant picker, dark mode, always on top, window size, weather and a Spotify button. The **←/→** keys switch tabs.
 - **Pin** (top right): keeps the window above other windows
 - To move the window, drag it by any empty area. To change a number in settings, hold **−/+** or use the mouse wheel.
 
-When a timer ends, the app plays a short chiptune, the window pops back up and the taskbar button flashes. The taskbar button also shows the timer's progress.
+When a timer ends, the app plays a short chiptune (a blooming jingle after focus, a wake-up jingle after a break; pressing START and skipping give a short click), the window pops back up and the taskbar button flashes. The taskbar button also shows the timer's progress.
 
 Settings and today's garden are saved in `PomodoroGarden.ini` next to the .exe. The app writes nothing else: no registry, no AppData. To reset everything, delete that file. Settings from version 1 carry over.
 

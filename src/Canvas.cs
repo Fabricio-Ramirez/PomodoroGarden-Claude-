@@ -93,6 +93,44 @@ namespace PomodoroGarden
             }
         }
 
+        // Greys an area out (overcast sky): each pixel moves percent% towards its own
+        // brightness, tinted with tint (0xRRGGBB).
+        public void Overcast(int x, int y, int w, int h, int percent, int tint)
+        {
+            int tr = (tint >> 16) & 0xFF, tg = (tint >> 8) & 0xFF, tb = tint & 0xFF;
+            ForEach(x, y, w, h, (r, g, b) =>
+            {
+                int lum = (r * 3 + g * 6 + b) / 10;
+                int[] target = { (lum + tr) / 2, (lum + tg) / 2, (lum + tb) / 2 };
+                return Mix(r, g, b, target[0], target[1], target[2], percent);
+            });
+        }
+
+        // Moves an area percent% towards one colour (0xRRGGBB), e.g. a lightning flash.
+        public void Blend(int x, int y, int w, int h, int percent, int rgb)
+        {
+            int tr = (rgb >> 16) & 0xFF, tg = (rgb >> 8) & 0xFF, tb = rgb & 0xFF;
+            ForEach(x, y, w, h, (r, g, b) => Mix(r, g, b, tr, tg, tb, percent));
+        }
+
+        static int Mix(int r, int g, int b, int tr, int tg, int tb, int percent)
+        {
+            r += (tr - r) * percent / 100; g += (tg - g) * percent / 100; b += (tb - b) * percent / 100;
+            return unchecked((int)0xFF000000) | (r << 16) | (g << 8) | b;
+        }
+
+        void ForEach(int x, int y, int w, int h, Func<int, int, int, int> f)
+        {
+            int x0 = Math.Max(clipX0, x), y0 = Math.Max(clipY0, y);
+            int x1 = Math.Min(clipX1, x + w), y1 = Math.Min(clipY1, y + h);
+            for (int yy = y0; yy < y1; yy++)
+                for (int xx = x0; xx < x1; xx++)
+                {
+                    int c = Px[yy * W + xx];
+                    Px[yy * W + xx] = f((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
+                }
+        }
+
         // Darkens an area towards a deep blue, keeping the pixel art readable (dark theme scenery).
         public void Dim(int x, int y, int w, int h)
         {
