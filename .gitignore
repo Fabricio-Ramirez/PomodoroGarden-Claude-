@@ -1,0 +1,8 @@
+# Personal settings the app writes next to the .exe (window position, today's garden, last-used date)
+*.ini
+
+# Local tool settings
+.claude/
+
+# Build output: publish the .exe as a GitHub Release asset instead of committing it
+release/
