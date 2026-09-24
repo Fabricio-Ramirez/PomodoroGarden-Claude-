@@ -8,14 +8,18 @@ namespace PomodoroGarden
     sealed class Settings
     {
         public int Focus = 25, Short = 5, Long = 15, Rounds = 4, Scale = 0;
-        public bool Sound = true, AutoStart = false, OnTop = false;
+        public bool Sound = true, AutoStart = false, OnTop = false, Dark = true;
+        public int Plant = Plants.Surprise;   // which plant to grow, or a different one every round
+        public string Spotify = "";           // optional Spotify link (playlist, album...) for the music button
         public int X = int.MinValue, Y = int.MinValue;
         public string Day = "";
-        public readonly List<int> Garden = new List<int>(); // flower colours grown today
+        public readonly List<int> Garden = new List<int>(); // plants grown today (see Plants.Code)
+
+        public static string PathOverride { get; set; } // used by the test tool so it never touches a real settings file
 
         public static string FilePath
         {
-            get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PomodoroGarden.ini"); }
+            get { return PathOverride ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PomodoroGarden.ini"); }
         }
 
         public static Settings Load()
@@ -43,6 +47,9 @@ namespace PomodoroGarden
                             case "sound": s.Sound = val == "1"; break;
                             case "autostart": s.AutoStart = val == "1"; break;
                             case "ontop": s.OnTop = val == "1"; break;
+                            case "dark": s.Dark = val == "1"; break;
+                            case "plant": s.Plant = Plants.ParseChoice(val.ToLowerInvariant()); break;
+                            case "spotify": s.Spotify = val; break;
                             case "x": if (isNum) s.X = n; break;
                             case "y": if (isNum) s.Y = n; break;
                             case "day": s.Day = val; break;
@@ -81,6 +88,10 @@ namespace PomodoroGarden
                     "sound=" + (Sound ? 1 : 0),
                     "autostart=" + (AutoStart ? 1 : 0),
                     "ontop=" + (OnTop ? 1 : 0),
+                    "dark=" + (Dark ? 1 : 0),
+                    "plant=" + Plants.KeyOf(Plant),
+                    "; paste a Spotify playlist or album link here to open it with the music button",
+                    "spotify=" + Spotify,
                     "scale=" + Scale,
                     "x=" + X,
                     "y=" + Y,

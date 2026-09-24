@@ -78,7 +78,7 @@ namespace PomodoroGarden
         }
 
         // Multi-colour sprite: each character is looked up in keys -> colors, '.' is transparent.
-        public void Sprite(string[] rows, int x, int y, string keys, int[] colors, bool flipX = false)
+        public void Sprite(string[] rows, int x, int y, string keys, int[] colors, bool flipX = false, int scale = 1)
         {
             for (int r = 0; r < rows.Length; r++)
             {
@@ -87,9 +87,25 @@ namespace PomodoroGarden
                 {
                     int k = keys.IndexOf(row[i]);
                     if (k < 0) continue;
-                    Set(flipX ? x + row.Length - 1 - i : x + i, y + r, colors[k]);
+                    int col = flipX ? row.Length - 1 - i : i;
+                    Rect(x + col * scale, y + r * scale, scale, scale, colors[k]);
                 }
             }
+        }
+
+        // Darkens an area towards a deep blue, keeping the pixel art readable (dark theme scenery).
+        public void Dim(int x, int y, int w, int h)
+        {
+            int x0 = Math.Max(clipX0, x), y0 = Math.Max(clipY0, y);
+            int x1 = Math.Min(clipX1, x + w), y1 = Math.Min(clipY1, y + h);
+            for (int yy = y0; yy < y1; yy++)
+                for (int xx = x0; xx < x1; xx++)
+                {
+                    int c = Px[yy * W + xx];
+                    int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+                    r = r * 45 / 100 + 6; g = g * 45 / 100 + 8; b = b * 52 / 100 + 22;
+                    Px[yy * W + xx] = unchecked((int)0xFF000000) | (r << 16) | (g << 8) | b;
+                }
         }
 
         // Single-colour sprite: every character other than '.' is painted with c.

@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace PomodoroGarden
 {
@@ -31,7 +32,7 @@ namespace PomodoroGarden
             DoubleBuffered = true;
             KeyPreview = true;
             Text = "Pomodoro Garden";
-            BackColor = Color.FromArgb(Pal.Ink);
+            BackColor = Color.FromArgb(cfg.Dark ? Theme.Dark.Bg : Theme.Classic.Bg);
             Icon icon = LoadIcon();
             if (icon != null) Icon = icon;
 
@@ -198,6 +199,39 @@ namespace PomodoroGarden
         public void Minimize() { WindowState = FormWindowState.Minimized; }
 
         public void Quit() { Close(); }
+
+        // The desktop app registers the spotify: link type; the Microsoft Store app adds a
+        // "Spotify.exe" alias in WindowsApps. Only reads: the app never writes to the registry.
+        public bool SpotifyInstalled
+        {
+            get
+            {
+                try
+                {
+                    using (RegistryKey key = Registry.ClassesRoot.OpenSubKey(@"spotify\shell\open\command"))
+                        if (key != null) return true;
+                }
+                catch { }
+                try
+                {
+                    string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    return System.IO.File.Exists(System.IO.Path.Combine(local, @"Microsoft\WindowsApps\Spotify.exe"))
+                        || System.IO.File.Exists(System.IO.Path.Combine(roaming, @"Spotify\Spotify.exe"));
+                }
+                catch { return false; }
+            }
+        }
+
+        public bool Open(string target)
+        {
+            try
+            {
+                using (Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })) { }
+                return true;
+            }
+            catch { return false; }
+        }
 
         // A timer finished: pop the window back up (without stealing focus) and flash the taskbar.
         public void Alert()

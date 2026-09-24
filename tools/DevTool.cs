@@ -17,12 +17,18 @@ namespace PomodoroGarden
         public void Minimize() { }
         public void Quit() { }
         public void Alert() { }
+        public bool SpotifyInstalled { get { return Installed; } }
+        public bool Installed = true, OpenWorks = true;
+        public readonly System.Collections.Generic.List<string> Opened = new System.Collections.Generic.List<string>();
+        public bool Open(string target) { Opened.Add(target); return OpenWorks; }
     }
 
     static class DevTool
     {
         static int Main(string[] args)
         {
+            // Never read or overwrite a real PomodoroGarden.ini.
+            Settings.PathOverride = Path.Combine(Path.GetTempPath(), "PomodoroGarden-devtool-" + Guid.NewGuid().ToString("N") + ".ini");
             if (args.Length == 2 && args[0] == "preview") { Previews(args[1]); return 0; }
             if (args.Length == 2 && args[0] == "icon") { MakeIcon(args[1]); return 0; }
             if (args.Length == 1 && args[0] == "cycle") return CycleTest();
@@ -64,8 +70,158 @@ namespace PomodoroGarden
             check("space pauses the timer", app.State == RunState.Paused);
             check("time format", App.FormatTime(25 * 60) == "25:00" && App.FormatTime(59.2) == "01:00" && App.FormatTime(0) == "00:00" && App.FormatTime(120 * 60) == "120:00");
 
+            PlantTests(check);
+            SpotifyTests(check);
+            SettingsFileTests(check);
+            ClickTests(check);
+
             Console.WriteLine(failures == 0 ? "cycle test: all passed" : "cycle test: " + failures + " failed");
             return failures == 0 ? 0 : 1;
+        }
+
+        // ---- version 2: plants, Spotify, settings file, clicking through the UI ----
+
+        static void PlantTests(Action<string, bool> check)
+        {
+            check("old garden entries are daisies", Plants.SpeciesOf(3) == Plants.Daisy && Plants.ColourOf(3) == Art.Flowers[3]);
+            check("plant code round trip", Plants.SpeciesOf(Plants.Code(Plants.Tree, 2)) == Plants.Tree);
+            check("unknown codes fall back safely", Plants.SpeciesOf(999) == Plants.Daisy && Plants.ColourOf(-5) != null);
+            check("plant names parse", Plants.ParseChoice("rose") == Plants.Rose && Plants.ParseChoice("nonsense") == Plants.Surprise
+                && Plants.KeyOf(Plants.Surprise) == "surprise" && Plants.ParseChoice(Plants.KeyOf(Plants.Cactus)) == Plants.Cactus);
+
+            var cfg = new Settings { Rounds = 2, Sound = false, Plant = Plants.Rose };
+            var app = new App(cfg, new NullHost());
+            check("chosen plant is planted", Plants.SpeciesOf(app.PlantCode) == Plants.Rose);
+            Action finish = () => { app.DebugState(app.Mode, RunState.Running, 1.0); app.Update(1); };
+            finish();
+            check("grown rose goes on the shelf", cfg.Garden.Count == 1 && Plants.SpeciesOf(cfg.Garden[0]) == Plants.Rose);
+            finish();
+            check("next round is a rose again", Plants.SpeciesOf(app.PlantCode) == Plants.Rose);
+
+            cfg.Plant = Plants.Surprise;
+            bool changes = true;
+            for (int i = 0; i < 20; i++)
+            {
+                int before = Plants.SpeciesOf(app.PlantCode);
+                finish(); finish();
+                if (Plants.SpeciesOf(app.PlantCode) == before) changes = false;
+            }
+            check("surprise me changes the plant every round", changes);
+
+            // Every plant, colour and growth stage stays inside the view, and draws something.
+            bool inside = true, visible = true;
+            var c = new Canvas(App.W, App.H);
+            for (int sp = 0; sp < Plants.Count; sp++)
+                for (int col = 0; col < Plants.ColoursOf(sp); col++)
+                    for (int step = 0; step <= 40; step++)
+                    {
+                        double p = step / 40.0;
+                        c.Clear(0);
+                        int hx, hy;
+                        Plants.Draw(c, 79, 95, p, Plants.Code(sp, col), 0.37 * step, true, out hx, out hy);
+                        int count = 0;
+                        for (int y = 0; y < c.H; y++)
+                            for (int x = 0; x < c.W; x++)
+                                if (c.Px[y * c.W + x] != 0)
+                                {
+                                    count++;
+                                    if (x < 8 || x >= 152 || y < 32 || y >= 120) inside = false;
+                                }
+                        if (count == 0) visible = false;
+                        if (!inside) { Console.WriteLine("  out of view: " + Plants.Names[sp] + " at " + p); break; }
+                    }
+            check("all plants fit the window at every stage", inside);
+            check("all plants draw at every stage", visible);
+        }
+
+        static void SpotifyTests(Action<string, bool> check)
+        {
+            check("spotify: no link opens the app", Spotify.Target("", true) == "spotify:");
+            check("spotify: no app opens the web player", Spotify.Target("", false) == Spotify.Web);
+            check("spotify: web playlist link opens in the app",
+                Spotify.Target("https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS?si=abc123", true) == "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS");
+            check("spotify: localised link", Spotify.Target("https://open.spotify.com/intl-es/album/4aawyAB9vmqN3uQ7FjRGTy", true) == "spotify:album:4aawyAB9vmqN3uQ7FjRGTy");
+            check("spotify: app link without the app goes to the web",
+                Spotify.Target("spotify:playlist:37i9dQZF1DX8Uebhn9wzrS", false) == "https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS");
+            check("spotify: other programs are refused",
+                Spotify.Target("C:\\Windows\\System32\\calc.exe", true) == "spotify:"
+                && Spotify.Target("file:///C:/evil.exe", false) == Spotify.Web
+                && Spotify.Target("https://evil.example/playlist/abc", true) == "spotify:"
+                && Spotify.Target("spotify:playlist:abc&calc", true) == "spotify:"
+                && Spotify.Target("https://open.spotify.com.evil.example/playlist/abc", false) == Spotify.Web);
+        }
+
+        static void SettingsFileTests(Action<string, bool> check)
+        {
+            var cfg = new Settings { Dark = false, Plant = Plants.Sunflower, Spotify = "https://open.spotify.com/playlist/abc?si=x=y" };
+            cfg.Garden.AddRange(new[] { 3, Plants.Code(Plants.Tree, 3) });
+            cfg.Save();
+            Settings back = Settings.Load();
+            check("settings file keeps the new options", !back.Dark && back.Plant == Plants.Sunflower && back.Spotify == cfg.Spotify
+                && back.Garden.Count == 2 && back.Garden[1] == Plants.Code(Plants.Tree, 3));
+            File.WriteAllLines(Settings.FilePath, new[] { "focus=30", "garden=0,1,5" }); // a version 1 file
+            Settings old = Settings.Load();
+            check("version 1 settings load with dark mode and surprise plants", old.Focus == 30 && old.Dark && old.Plant == Plants.Surprise && old.Garden.Count == 3);
+            File.Delete(Settings.FilePath);
+        }
+
+        // Presses a button the way the mouse does, at the centre of its hot spot.
+        static void Click(App app, Canvas c, string id)
+        {
+            app.Render(c);
+            var hotsField = typeof(App).GetField("hots", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            foreach (HotSpot h in (System.Collections.Generic.List<HotSpot>)hotsField.GetValue(app))
+                if (h.Id == id)
+                {
+                    int x = h.X + h.W / 2, y = h.Y + h.H / 2;
+                    app.MouseDown(x, y);
+                    app.MouseUp(x, y);
+                    app.Render(c);
+                    return;
+                }
+            throw new Exception("no button " + id);
+        }
+
+        static void ClickTests(Action<string, bool> check)
+        {
+            var host = new NullHost();
+            var cfg = new Settings { Sound = false };
+            var app = new App(cfg, host);
+            var c = new Canvas(App.W, App.H);
+
+            Click(app, c, "music");
+            check("music button opens the Spotify app", host.Opened.Count == 1 && host.Opened[0] == "spotify:" && app.Toast == "OPENING SPOTIFY...");
+            host.Installed = false; host.Opened.Clear();
+            Click(app, c, "music");
+            check("without the app it opens the web player", host.Opened.Count == 1 && host.Opened[0] == Spotify.Web && app.Toast == "OPENING SPOTIFY IN BROWSER");
+            host.Installed = true; host.OpenWorks = false; host.Opened.Clear();
+            Click(app, c, "music");
+            check("if nothing opens it says so", host.Opened.Count == 2 && app.Toast == "COULD NOT OPEN SPOTIFY");
+            host.OpenWorks = true; host.Opened.Clear();
+            cfg.Spotify = "https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS";
+            Click(app, c, "music");
+            check("music button opens the saved playlist", host.Opened.Count == 1 && host.Opened[0] == "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS");
+
+            Click(app, c, "gear");
+            check("gear opens settings on the timer tab", app.InSettings && app.SettingsTab == 0);
+            Click(app, c, "tab-look");
+            check("look tab opens", app.SettingsTab == 1);
+            Click(app, c, "plant5");
+            check("tree tile picks the little tree", cfg.Plant == Plants.Tree && Plants.SpeciesOf(app.PlantCode) == Plants.Tree);
+            Click(app, c, "plant0");
+            check("? tile picks surprise me", cfg.Plant == Plants.Surprise);
+            bool dark = cfg.Dark;
+            Click(app, c, "dark");
+            check("dark mode button switches theme", cfg.Dark == !dark && app.T == (cfg.Dark ? Theme.Dark : Theme.Classic));
+            Click(app, c, "dark-row");
+            check("clicking the dark mode label switches it back", cfg.Dark == dark);
+            host.Opened.Clear();
+            Click(app, c, "spotify");
+            check("settings Spotify button opens it too", host.Opened.Count == 1);
+            Click(app, c, "tab-timer");
+            check("timer tab opens", app.SettingsTab == 0);
+            Click(app, c, "done");
+            check("done closes settings", !app.InSettings);
         }
 
         // ---- previews ----
@@ -73,12 +229,12 @@ namespace PomodoroGarden
         static void Previews(string dir)
         {
             Directory.CreateDirectory(dir);
-            var cfg = new Settings { Scale = 3 };
+            var cfg = new Settings { Scale = 3, Dark = false, Plant = Plants.Daisy };
             cfg.Day = DateTime.Now.ToString("yyyy-MM-dd");
             var app = new App(cfg, new NullHost());
             var c = new Canvas(App.W, App.H);
 
-            app.FlowerIndex = 0;
+            app.PlantCode = 0;
             Shot(app, c, dir, "01_focus_idle", Mode.Focus, RunState.Idle, 0, 1.2);
             cfg.Garden.AddRange(new[] { 0, 1, 2 });
             app.RoundsDone = 1;
@@ -89,23 +245,48 @@ namespace PomodoroGarden
             Shot(app, c, dir, "04_focus_paused_93", Mode.Focus, RunState.Paused, 0.93, 1.2);
             app.BreakPlant = 1; app.RoundsDone = 2; cfg.Garden.Add(0);
             Shot(app, c, dir, "05_short_break", Mode.ShortBreak, RunState.Running, 0.4, 5.4);
-            app.RoundsDone = 4; app.FlowerIndex = 3;
+            app.RoundsDone = 4; app.PlantCode = 3;
             for (int i = 0; i < 12; i++) cfg.Garden.Add(i);
             Shot(app, c, dir, "06_long_break", Mode.LongBreak, RunState.Idle, 0, 7.7);
             app.RoundsDone = 0;
             app.InSettings = true;
             app.HoverId = "focus+";
             Shot(app, c, dir, "07_settings", Mode.Focus, RunState.Idle, 0, 1);
+            app.HoverId = "plant3";
+            app.SettingsTab = 1;
+            Shot(app, c, dir, "08_settings_look", Mode.Focus, RunState.Idle, 0, 1);
             app.InSettings = false;
+            app.SettingsTab = 0;
             app.HoverId = null;
+
+            // Dark mode, one shot per plant.
+            cfg.Dark = true;
+            cfg.Garden.Clear();
+            for (int sp = 0; sp < Plants.Count; sp++) cfg.Garden.Add(Plants.Code(sp, 0));
+            app.RoundsDone = 1;
+            Mode[] modes = { Mode.Focus, Mode.Focus, Mode.ShortBreak, Mode.Focus, Mode.LongBreak, Mode.ShortBreak };
+            for (int sp = 0; sp < Plants.Count; sp++)
+            {
+                app.PlantCode = Plants.Code(sp, sp % Plants.ColoursOf(sp));
+                app.BreakPlant = 1;
+                Shot(app, c, dir, "2" + sp + "_dark_" + Plants.Keys[sp], modes[sp], modes[sp] == Mode.Focus ? RunState.Running : RunState.Idle,
+                     modes[sp] == Mode.Focus ? (sp == 0 ? 1.0 : 0.6 + sp * 0.07) : 0, 2.3);
+            }
+            app.InSettings = true; app.SettingsTab = 1; app.HoverId = "music";
+            Shot(app, c, dir, "30_dark_settings_look", Mode.Focus, RunState.Idle, 0, 1);
+            app.SettingsTab = 0; app.HoverId = null;
+            Shot(app, c, dir, "31_dark_settings_timer", Mode.Focus, RunState.Idle, 0, 1);
+            app.InSettings = false;
+            cfg.Dark = false;
 
             // Hover every button on every screen and report any text that doesn't fit.
             var hotsField = typeof(App).GetField("hots", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             foreach (Mode m in new[] { Mode.Focus, Mode.ShortBreak, Mode.LongBreak })
                 foreach (RunState s in new[] { RunState.Idle, RunState.Running, RunState.Paused })
-                    foreach (bool settings in new[] { false, true })
+                    foreach (int screen in new[] { -1, 0, 1 })
                     {
-                        app.InSettings = settings;
+                        app.InSettings = screen >= 0;
+                        app.SettingsTab = Math.Max(0, screen);
                         app.DebugState(m, s, 0.5);
                         app.HoverId = null;
                         app.Render(c);
@@ -117,22 +298,33 @@ namespace PomodoroGarden
             app.HoverId = null;
             Console.WriteLine(Canvas.Overflows.Count == 0 ? "text check: all texts fit" : "text too wide: " + string.Join(" | ", Canvas.Overflows));
 
-            // Growth strip: the plant at several stages, one pot per column.
+            // Growth strips: each plant at several stages, one pot per column, one row per plant.
             double[] stages = { 0, 0.02, 0.06, 0.12, 0.25, 0.4, 0.55, 0.7, 0.84, 0.88, 0.93, 0.97, 1.0 };
-            var strip = new Canvas(stages.Length * 30, 80);
+            var strip = new Canvas(stages.Length * 50, Plants.Count * 90);
             strip.Clear(Pal.Sky);
-            for (int i = 0; i < stages.Length; i++)
-            {
-                Art.DrawPot(strip, i * 30 + 2, 60);
-                Art.DrawPlant(strip, i * 30 + 14, 61, stages[i], Art.Flowers[i % Art.Flowers.Length], 0, false);
-            }
-            Save(strip, Path.Combine(dir, "10_growth.png"), 4);
+            for (int sp = 0; sp < Plants.Count; sp++)
+                for (int i = 0; i < stages.Length; i++)
+                {
+                    int hx, hy, y = sp * 90 + 70;
+                    Art.DrawPot(strip, i * 50 + 12, y);
+                    Plants.Draw(strip, i * 50 + 24, y + 1, stages[i], Plants.Code(sp, 0), 0, false, out hx, out hy);
+                }
+            Save(strip, Path.Combine(dir, "10_growth.png"), 2);
 
-            // All flower colours in bloom.
-            var blooms = new Canvas(Art.Flowers.Length * 24, 24);
+            // Every plant in every colour, fully grown, plus the shelf versions.
+            int most = 0;
+            for (int sp = 0; sp < Plants.Count; sp++) most = Math.Max(most, Plants.ColoursOf(sp));
+            var blooms = new Canvas(most * 50, Plants.Count * 90);
             blooms.Clear(Pal.Sky);
-            for (int i = 0; i < Art.Flowers.Length; i++) Art.DrawBloom(blooms, i * 24 + 12, 12, 8, Art.Flowers[i]);
-            Save(blooms, Path.Combine(dir, "11_blooms.png"), 8);
+            for (int sp = 0; sp < Plants.Count; sp++)
+                for (int col = 0; col < Plants.ColoursOf(sp); col++)
+                {
+                    int hx, hy, y = sp * 90 + 70;
+                    Art.DrawPot(blooms, col * 50 + 12, y);
+                    Plants.Draw(blooms, col * 50 + 24, y + 1, 1, Plants.Code(sp, col), 0, false, out hx, out hy);
+                    Plants.DrawMini(blooms, col * 50 + 2, y + 5, Plants.Code(sp, col));
+                }
+            Save(blooms, Path.Combine(dir, "11_blooms.png"), 3);
         }
 
         static void Shot(App app, Canvas c, string dir, string name, Mode m, RunState s, double progress, double now)

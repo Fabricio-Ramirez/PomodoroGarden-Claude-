@@ -18,10 +18,10 @@ namespace PomodoroGarden
         {
             hots.Clear();
             c.NoClip();
-            c.Clear(Pal.Ink);
+            c.Clear(T.Bg);
             DrawTitleBar(c);
             if (InSettings) DrawSettings(c); else DrawMain(c);
-            c.Outline(0, 0, W, H, Pal.Charcoal);
+            c.Outline(0, 0, W, H, T.Frame);
         }
 
         HotSpot AddHot(string id, int x, int y, int w, int h, Action click, string hint)
@@ -46,7 +46,7 @@ namespace PomodoroGarden
 
         int NeutralButton(Canvas c, string id, int x, int y, int w, int h, Action click, string hint, bool repeat)
         {
-            return Button(c, id, x, y, w, h, Pal.Button, Pal.ButtonHover, Pal.Slate, Pal.Shadow, click, hint, repeat);
+            return Button(c, id, x, y, w, h, T.Button, T.ButtonHover, T.ButtonShine, T.ButtonDark, click, hint, repeat);
         }
 
         void DrawBanner(Canvas c, string text, int fill, int shine, int dark)
@@ -60,22 +60,24 @@ namespace PomodoroGarden
 
         void DrawHint(Canvas c, int y, string fallback)
         {
+            if (Toast != null) { c.TextIn(Toast, 0, W, y, Pal.Spotify); return; }
             HotSpot h = Find(HoverId);
             bool hovered = h != null && h.Hint != null;
-            c.TextIn(hovered ? h.Hint : fallback, 0, W, y, hovered ? Pal.Silver : Pal.Slate);
+            c.TextIn(hovered ? h.Hint : fallback, 0, W, y, hovered ? T.Hint : T.Muted);
         }
 
         // ---- title bar ----
 
         void DrawTitleBar(Canvas c)
         {
-            c.Rect(1, 1, W - 2, 13, Pal.Charcoal);
-            c.Sprite(Art.TitleSprout, 4, 4, "LGQPp", new[] { Pal.Lime, Pal.Green, Pal.PotLight, Pal.Pot, Pal.PotDark });
-            c.Text("POMODORO GARDEN", 14, 4, Pal.White);
-            TitleButton(c, "gear", 111, Art.IconGear, InSettings ? "BACK TO THE TIMER" : "SETTINGS", ToggleSettings, InSettings);
-            TitleButton(c, "pin", 123, Art.IconPin, Cfg.OnTop ? "UNPIN WINDOW" : "KEEP WINDOW ON TOP", TogglePin, Cfg.OnTop);
-            TitleButton(c, "min", 135, Art.IconMinimize, "MINIMIZE", host.Minimize, false);
-            TitleButton(c, "close", 147, Art.IconClose, "CLOSE", host.Quit, false);
+            c.Rect(1, 1, W - 2, 13, T.Bar);
+            c.Sprite(Art.TitleSprout, 3, 4, "LGQPp", new[] { Pal.Lime, Pal.Green, Pal.PotLight, Pal.Pot, Pal.PotDark });
+            c.Text("POMODORO GARDEN", 12, 4, T.Text);
+            TitleButton(c, "music", 104, Art.IconMusic, "OPEN SPOTIFY", OpenSpotify, false);
+            TitleButton(c, "gear", 115, Art.IconGear, InSettings ? "BACK TO THE TIMER" : "SETTINGS", ToggleSettings, InSettings);
+            TitleButton(c, "pin", 126, Art.IconPin, Cfg.OnTop ? "UNPIN WINDOW" : "KEEP WINDOW ON TOP", TogglePin, Cfg.OnTop);
+            TitleButton(c, "min", 137, Art.IconMinimize, "MINIMIZE", host.Minimize, false);
+            TitleButton(c, "close", 148, Art.IconClose, "CLOSE", host.Quit, false);
         }
 
         void TitleButton(Canvas c, string id, int x, string[] icon, string hint, Action click, bool active)
@@ -83,9 +85,11 @@ namespace PomodoroGarden
             const int Y = 2;
             AddHot(id, x, Y, 11, 11, click, hint);
             bool hov = HoverId == id, down = hov && pressId == id;
-            if (hov) c.Panel(x, Y, 11, 11, id == "close" ? Pal.Red : Pal.Slate, id == "close" ? Pal.Red : Pal.Slate);
-            else if (active) c.Panel(x, Y, 11, 11, Pal.Navy, Pal.Navy);
-            c.Mask(icon, x + 2, Y + 2 + (down ? 1 : 0), active && !hov ? Pal.Yellow : hov ? Pal.White : Pal.Silver);
+            int hoverFill = id == "close" ? Pal.Red : id == "music" ? Pal.Spotify : T.ButtonShine;
+            if (hov) c.Panel(x, Y, 11, 11, hoverFill, hoverFill);
+            else if (active) c.Panel(x, Y, 11, 11, T.Active, T.Active);
+            int col = active && !hov ? Pal.Yellow : hov ? Pal.White : id == "music" ? Pal.Spotify : T.Hint;
+            c.Mask(icon, x + 2, Y + 2 + (down ? 1 : 0), col);
         }
 
         // ---- main screen ----
@@ -125,13 +129,13 @@ namespace PomodoroGarden
             int x = (W - PixelFont.Width(s) * 3) / 2, y = 126;
             bool dim = State == RunState.Paused && (int)(Now * 2) % 2 == 1;
             c.Text(s, x + 1, y + 1, ModeDark, 3);
-            c.Text(s, x, y, dim ? Pal.Slate : Pal.White, 3);
+            c.Text(s, x, y, dim ? T.Muted : T.Text, 3);
         }
 
         void DrawProgress(Canvas c)
         {
             const int X = 16, Y = 153, BW = 128;
-            c.Panel(X, Y, BW, 6, Pal.Charcoal, Pal.Charcoal);
+            c.Panel(X, Y, BW, 6, T.Faint, T.Faint);
             int fill = (int)Math.Round((BW - 2) * Progress);
             if (fill <= 0) return;
             c.Rect(X + 1, Y + 1, fill, 4, ModeFill);
@@ -150,7 +154,7 @@ namespace PomodoroGarden
                 int tx = x + i * 10;
                 bool current = i == done && Mode == Mode.Focus && State != RunState.Idle;
                 if (i < done) c.Sprite(Art.Tomato, tx, y, Art.TomatoKeys, Art.TomatoCols);
-                else c.Mask(Art.Tomato, tx, y, current && (int)(Now * 2) % 2 == 0 ? Pal.Plum : Pal.Charcoal);
+                else c.Mask(Art.Tomato, tx, y, current && (int)(Now * 2) % 2 == 0 ? Pal.Plum : T.Faint);
             }
         }
 
@@ -158,7 +162,7 @@ namespace PomodoroGarden
         {
             const int Y = 172;
             int o = NeutralButton(c, "reset", 26, Y, 18, 18, Reset, "RESET THIS TIMER", false);
-            c.Mask(Art.IconReset, 31, Y + 5 + o, Pal.White);
+            c.Mask(Art.IconReset, 31, Y + 5 + o, T.Text);
 
             string label = State == RunState.Running ? "PAUSE" : State == RunState.Paused ? "RESUME" : "START";
             string hint = State == RunState.Running ? "PAUSE  (SPACE)" : "START  (SPACE)";
@@ -167,7 +171,7 @@ namespace PomodoroGarden
             c.TextIn(label, 50, 60, Y + 5 + o, Pal.White);
 
             o = NeutralButton(c, "skip", 116, Y, 18, 18, Skip, Mode == Mode.Focus ? "SKIP TO BREAK" : "SKIP TO FOCUS", false);
-            c.Mask(Art.IconSkip, 121, Y + 5 + o, Pal.White);
+            c.Mask(Art.IconSkip, 121, Y + 5 + o, T.Text);
         }
 
         void DrawShelf(Canvas c)
@@ -181,12 +185,12 @@ namespace PomodoroGarden
                 n == 0 ? "FINISH A ROUND TO GROW ONE" : n + (n == 1 ? " PLANT" : " PLANTS") + " GROWN TODAY");
             if (n == 0)
             {
-                c.TextIn("TODAY'S GARDEN", 0, W, 208, Pal.Charcoal);
+                c.TextIn("TODAY'S GARDEN", 0, W, 208, T.Faint);
                 return;
             }
             int show = n <= 14 ? n : 13;
             for (int i = 0; i < show; i++)
-                Art.DrawMiniPlant(c, 9 + i * 10, 206, Art.FlowerAt(Cfg.Garden[n - show + i]));
+                Plants.DrawMini(c, 9 + i * 10, 206, Cfg.Garden[n - show + i]);
             if (n > 14) c.Text("+" + (n - 13), 9 + 13 * 10, 209, Pal.Yellow);
         }
 
@@ -204,6 +208,7 @@ namespace PomodoroGarden
             if (Mode == Mode.Focus) DrawDay(c);
             else if (Mode == Mode.ShortBreak) DrawSunset(c);
             else DrawNight(c);
+            if (T.DimScene) c.Dim(SX, SY, SW, SH);
 
             int sill = SY + SH - 8;
             c.HLine(SX, sill, SW, Pal.WoodLight);
@@ -213,8 +218,9 @@ namespace PomodoroGarden
 
             Art.DrawPot(c, PotX, PotY);
             double p = PlantGrowth;
-            Art.DrawPlant(c, StemX, SoilY, p, Art.FlowerAt(FlowerIndex), Now, State == RunState.Running && Mode == Mode.Focus);
-            if (p >= 1) DrawSparkles(c, StemX + 1, 44);
+            int headX, headY;
+            Plants.Draw(c, StemX, SoilY, p, PlantCode, Now, State == RunState.Running && Mode == Mode.Focus, out headX, out headY);
+            if (p >= 1) DrawSparkles(c, headX, headY);
             if (Mode == Mode.ShortBreak && p >= 1) DrawButterfly(c);
             if (Mode == Mode.LongBreak) DrawFireflies(c);
             c.NoClip();
@@ -348,24 +354,9 @@ namespace PomodoroGarden
 
         void DrawSettings(Canvas c)
         {
-            DrawBanner(c, "SETTINGS", Pal.Slate, Pal.Silver, Pal.Charcoal);
-
-            c.Text("TIMER (MINUTES)", 8, 32, Pal.Slate);
-            Stepper(c, "focus", 41, "FOCUS", () => Cfg.Focus, v => { Cfg.Focus = v; DurationsChanged(); }, 1, 180, "", true, "MINUTES OF FOCUS PER ROUND");
-            Stepper(c, "short", 54, "SHORT BREAK", () => Cfg.Short, v => { Cfg.Short = v; DurationsChanged(); }, 1, 60, "", true, "MINUTES FOR A SHORT BREAK");
-            Stepper(c, "long", 67, "LONG BREAK", () => Cfg.Long, v => { Cfg.Long = v; DurationsChanged(); }, 1, 90, "", true, "MINUTES FOR A LONG BREAK");
-            Stepper(c, "rounds", 80, "LONG BREAK EVERY", () => Cfg.Rounds, v => Cfg.Rounds = v, 1, 10, "", false, "FOCUS ROUNDS PER LONG BREAK");
-
-            c.Text("OPTIONS", 8, 96, Pal.Slate);
-            Toggle(c, "sound", 105, "SOUND", Cfg.Sound, () => { Cfg.Sound = !Cfg.Sound; if (Cfg.Sound) Chiptune.Bloom(); }, "CHIME WHEN A TIMER ENDS");
-            Toggle(c, "auto", 118, "AUTO-START NEXT", Cfg.AutoStart, () => Cfg.AutoStart = !Cfg.AutoStart, "NO NEED TO PRESS START");
-            Toggle(c, "top", 131, "ALWAYS ON TOP", Cfg.OnTop, TogglePin, "KEEP ABOVE OTHER WINDOWS");
-            Stepper(c, "size", 144, "WINDOW SIZE", () => Cfg.Scale, v => { Cfg.Scale = v; host.ApplyScale(v); }, 1, Math.Max(1, host.MaxScale), "X", false, "ZOOM OF THIS WINDOW");
-
-            c.Text("PRESETS", 8, 160, Pal.Slate);
-            Preset(c, "p1", 8, 25, 5, 15, "CLASSIC POMODORO");
-            Preset(c, "p2", 58, 50, 10, 20, "LONGER STUDY BLOCKS");
-            Preset(c, "p3", 108, 90, 20, 30, "DEEP WORK SESSIONS");
+            SettingsTabButton(c, "tab-timer", 0, 28, "TIMER", "TIMER LENGTHS AND SOUND");
+            SettingsTabButton(c, "tab-look", 1, 82, "LOOK", "PLANT, DARK MODE, MUSIC");
+            if (SettingsTab == 0) DrawTimerSettings(c); else DrawLookSettings(c);
 
             int o = Button(c, "done", 50, 188, 60, 16, Pal.Green, Pal.GreenHover, Pal.Lime, Pal.Teal, ToggleSettings, "BACK TO THE TIMER  (ESC)", false);
             c.TextIn("DONE", 50, 60, 193 + o, Pal.Teal);
@@ -374,40 +365,112 @@ namespace PomodoroGarden
             DrawHint(c, 210, "SAVED AUTOMATICALLY");
         }
 
+        void SettingsTabButton(Canvas c, string id, int tab, int x, string label, string hint)
+        {
+            bool on = SettingsTab == tab;
+            int o = Button(c, id, x, 16, 50, 13,
+                on ? Pal.Slate : T.Button, on ? Pal.Silver : T.ButtonHover,
+                on ? Pal.Silver : T.ButtonShine, on ? Pal.Charcoal : T.ButtonDark,
+                () => SettingsTab = tab, hint, false);
+            if (on) c.TextIn(label, x, 50, 20 + o, Pal.Charcoal);
+            c.TextIn(label, x, 50, 19 + o, on ? Pal.White : T.Hint);
+        }
+
+        void DrawTimerSettings(Canvas c)
+        {
+            c.Text("TIMER (MINUTES)", 8, 34, T.Muted);
+            Stepper(c, "focus", 43, "FOCUS", () => Cfg.Focus, v => { Cfg.Focus = v; DurationsChanged(); }, 1, 180, "", true, "MINUTES OF FOCUS PER ROUND");
+            Stepper(c, "short", 56, "SHORT BREAK", () => Cfg.Short, v => { Cfg.Short = v; DurationsChanged(); }, 1, 60, "", true, "MINUTES FOR A SHORT BREAK");
+            Stepper(c, "long", 69, "LONG BREAK", () => Cfg.Long, v => { Cfg.Long = v; DurationsChanged(); }, 1, 90, "", true, "MINUTES FOR A LONG BREAK");
+            Stepper(c, "rounds", 82, "LONG BREAK EVERY", () => Cfg.Rounds, v => Cfg.Rounds = v, 1, 10, "", false, "FOCUS ROUNDS PER LONG BREAK");
+
+            c.Text("PRESETS", 8, 99, T.Muted);
+            Preset(c, "p1", 8, 108, 25, 5, 15, "CLASSIC POMODORO");
+            Preset(c, "p2", 58, 108, 50, 10, 20, "LONGER STUDY BLOCKS");
+            Preset(c, "p3", 108, 108, 90, 20, 30, "DEEP WORK SESSIONS");
+
+            c.Text("OPTIONS", 8, 127, T.Muted);
+            Toggle(c, "sound", 136, "SOUND", Cfg.Sound, () => { Cfg.Sound = !Cfg.Sound; if (Cfg.Sound) Chiptune.Bloom(); }, "CHIME WHEN A TIMER ENDS");
+            Toggle(c, "auto", 149, "AUTO-START NEXT", Cfg.AutoStart, () => Cfg.AutoStart = !Cfg.AutoStart, "NO NEED TO PRESS START");
+        }
+
+        // Plant picker: a tile per plant, then appearance and music.
+        void DrawLookSettings(Canvas c)
+        {
+            c.Text("PLANT", 8, 34, T.Muted);
+            c.Text(Plants.NameOf(Cfg.Plant), 152 - PixelFont.Width(Plants.NameOf(Cfg.Plant)), 34, Pal.Yellow);
+            for (int i = 0; i <= Plants.Count; i++)
+            {
+                int choice = i - 1, x = 8 + i * 21;
+                PlantTile(c, "plant" + i, x, 43, choice);
+            }
+
+            c.Text("APPEARANCE", 8, 78, T.Muted);
+            Toggle(c, "dark", 87, "DARK MODE", Cfg.Dark, () => Cfg.Dark = !Cfg.Dark, "EASY ON THE EYES AT NIGHT");
+            Toggle(c, "top", 100, "ALWAYS ON TOP", Cfg.OnTop, TogglePin, "KEEP ABOVE OTHER WINDOWS");
+            Stepper(c, "size", 113, "WINDOW SIZE", () => Cfg.Scale, v => { Cfg.Scale = v; host.ApplyScale(v); }, 1, Math.Max(1, host.MaxScale), "X", false, "ZOOM OF THIS WINDOW");
+
+            c.Text("MUSIC", 8, 130, T.Muted);
+            c.Text("SPOTIFY", 8, 141, T.Text);
+            int o = Button(c, "spotify", 111, 139, 41, 12, Pal.Spotify, unchecked((int)0xFF3BD16F), Pal.Lime, Pal.Teal,
+                           OpenSpotify, string.IsNullOrEmpty(Cfg.Spotify) ? "OPEN THE SPOTIFY APP" : "OPEN YOUR SAVED PLAYLIST", false);
+            c.TextIn("OPEN", 111, 41, 142 + o, Pal.Teal);
+            c.TextIn("OPEN", 111, 41, 141 + o, Pal.White);
+        }
+
+        void PlantTile(Canvas c, string id, int x, int y, int choice)
+        {
+            bool on = Cfg.Plant == choice;
+            string hint = choice == Plants.Surprise ? "NEW PLANT EVERY ROUND" : "GROW A " + Plants.Names[choice];
+            int o = Button(c, id, x, y, 18, 28,
+                on ? Pal.Green : T.Button, on ? Pal.GreenHover : T.ButtonHover,
+                on ? Pal.Lime : T.ButtonShine, on ? Pal.Teal : T.ButtonDark,
+                () => ChoosePlant(choice), hint, false);
+            if (choice == Plants.Surprise)
+            {
+                c.Text("?", x + 4, y + 8 + o, Pal.Teal, 2);
+                c.Text("?", x + 4, y + 7 + o, Pal.Yellow, 2);
+                return;
+            }
+            // Show each plant in its first colour, or in the colour being grown right now.
+            int code = PlantCode >= 0 && Plants.SpeciesOf(PlantCode) == choice ? PlantCode : Plants.Code(choice, 0);
+            Plants.DrawMini(c, x + 2, y + 3 + o, code, 2);
+        }
+
         void Stepper(Canvas c, string id, int y, string label, Func<int> get, Action<int> set,
                      int min, int max, string suffix, bool minutes, string hint)
         {
             Action<int> change = d => set(Math.Max(min, Math.Min(max, get() + d)));
             AddHot(id, 4, y, W - 8, 12, null, hint).Wheel = change;
-            c.Text(label, 8, y + 2, Pal.White);
+            c.Text(label, 8, y + 2, T.Text);
 
             int v = get();
             int o = NeutralButton(c, id + "-", 109, y, 11, 12, () => change(-Step(minutes)), hint, true);
-            c.Mask(Art.IconMinus, 112, y + 3 + o, v > min ? Pal.White : Pal.Slate);
+            c.Mask(Art.IconMinus, 112, y + 3 + o, v > min ? T.Text : T.Muted);
             c.TextIn(v + suffix, 120, 21, y + 2, Pal.Yellow);
             o = NeutralButton(c, id + "+", 141, y, 11, 12, () => change(Step(minutes)), hint, true);
-            c.Mask(Art.IconPlus, 144, y + 3 + o, v < max ? Pal.White : Pal.Slate);
+            c.Mask(Art.IconPlus, 144, y + 3 + o, v < max ? T.Text : T.Muted);
         }
 
         void Toggle(Canvas c, string id, int y, string label, bool on, Action flip, string hint)
         {
             AddHot(id + "-row", 4, y, 112, 12, flip, hint);
-            c.Text(label, 8, y + 2, Pal.White);
+            c.Text(label, 8, y + 2, T.Text);
             int o = Button(c, id, 121, y, 31, 12,
-                on ? Pal.Green : Pal.Button, on ? Pal.GreenHover : Pal.ButtonHover,
-                on ? Pal.Lime : Pal.Slate, on ? Pal.Teal : Pal.Shadow, flip, hint, false);
-            c.TextIn(on ? "ON" : "OFF", 121, 31, y + 2 + o, on ? Pal.White : Pal.Silver);
+                on ? Pal.Green : T.Button, on ? Pal.GreenHover : T.ButtonHover,
+                on ? Pal.Lime : T.ButtonShine, on ? Pal.Teal : T.ButtonDark, flip, hint, false);
+            c.TextIn(on ? "ON" : "OFF", 121, 31, y + 2 + o, on ? Pal.White : T.Hint);
         }
 
-        void Preset(Canvas c, string id, int x, int focus, int brk, int lng, string hint)
+        void Preset(Canvas c, string id, int x, int y, int focus, int brk, int lng, string hint)
         {
             bool active = Cfg.Focus == focus && Cfg.Short == brk && Cfg.Long == lng;
-            int o = Button(c, id, x, 169, 44, 12,
-                active ? Pal.Green : Pal.Button, active ? Pal.GreenHover : Pal.ButtonHover,
-                active ? Pal.Lime : Pal.Slate, active ? Pal.Teal : Pal.Shadow,
+            int o = Button(c, id, x, y, 44, 12,
+                active ? Pal.Green : T.Button, active ? Pal.GreenHover : T.ButtonHover,
+                active ? Pal.Lime : T.ButtonShine, active ? Pal.Teal : T.ButtonDark,
                 () => { Cfg.Focus = focus; Cfg.Short = brk; Cfg.Long = lng; DurationsChanged(); },
                 hint, false);
-            c.TextIn(focus + "/" + brk, x, 44, 171 + o, active ? Pal.White : Pal.Silver);
+            c.TextIn(focus + "/" + brk, x, 44, y + 2 + o, active ? Pal.White : T.Hint);
         }
     }
 }
