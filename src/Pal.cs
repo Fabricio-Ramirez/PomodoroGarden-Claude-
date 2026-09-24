@@ -40,6 +40,8 @@ namespace PomodoroGarden
         public const int WoodLight = unchecked((int)0xFFC4855A);
         public const int Wood = unchecked((int)0xFF9A5B3A);
         public const int WoodDark = unchecked((int)0xFF6B3A28);
+        public const int LeafDark = unchecked((int)0xFF1B4D3E);
+        public const int Spotify = unchecked((int)0xFF1DB954);
 
         // Hover shades for the buttons.
         public const int RedHover = unchecked((int)0xFFC9506A);

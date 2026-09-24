@@ -5,14 +5,15 @@ namespace PomodoroGarden
     sealed class Flower
     {
         public readonly int Main, Light, Dark, Line, Center, CenterDark;
+        public readonly bool Blossom; // little tree: blossoms instead of fruit
 
-        public Flower(int main, int light, int dark, int line, int center, int centerDark)
+        public Flower(int main, int light, int dark, int line, int center, int centerDark, bool blossom = false)
         {
-            Main = main; Light = light; Dark = dark; Line = line; Center = center; CenterDark = centerDark;
+            Main = main; Light = light; Dark = dark; Line = line; Center = center; CenterDark = centerDark; Blossom = blossom;
         }
     }
 
-    // Pixel-art sprites, the pot, and the procedurally grown plant.
+    // Pixel-art sprites, icons, the pot and the shared pieces of the plants.
     static class Art
     {
         public static readonly Flower[] Flowers =
@@ -24,12 +25,6 @@ namespace PomodoroGarden
             new Flower(Pal.White, Pal.PureWhite, Pal.Silver, Pal.Slate, Pal.Yellow, Pal.Orange),
             new Flower(Pal.Orange, Pal.Yellow, Pal.Pot, Pal.PotDark, Pal.Plum, Pal.Ink),
         };
-
-        public static Flower FlowerAt(int i)
-        {
-            int n = Flowers.Length;
-            return Flowers[((i % n) + n) % n];
-        }
 
         // ---- icons (single colour masks) ----
 
@@ -99,6 +94,17 @@ namespace PomodoroGarden
             ".......",
         };
 
+        public static readonly string[] IconMusic =
+        {
+            "..#####",
+            "..#####",
+            "..#...#",
+            "..#...#",
+            ".##..##",
+            "###.###",
+            ".#...#.",
+        };
+
         public static readonly string[] IconMinus = { ".....", ".....", "#####", ".....", "....." };
         public static readonly string[] IconPlus = { "..#..", "..#..", "#####", "..#..", "..#.." };
 
@@ -121,21 +127,6 @@ namespace PomodoroGarden
         {
             "LL...GG",
             ".LL.GG.",
-            "...G...",
-            "QPPPPPp",
-            ".QPPPp.",
-            ".QPPPp.",
-            "..PPp..",
-        };
-
-        public static readonly string[] MiniPlant =
-        {
-            "..fFF..",
-            ".fFyFd.",
-            "..Fdd..",
-            "...G...",
-            ".LLG...",
-            "...GLL.",
             "...G...",
             "QPPPPPp",
             ".QPPPp.",
@@ -188,75 +179,16 @@ namespace PomodoroGarden
 
         public static readonly string[] SparkSmall = { ".Y.", "YWY", ".Y." };
 
-        // ---- plant ----
+        // ---- plant parts (the plants themselves are in Plants.cs) ----
 
-        const int MaxStem = 46;
-
-        // Leaves: height on the stem, side, and full-grown length.
-        static readonly int[] LeafAt = { 3, 3, 10, 16, 22, 28, 34, 39 };
-        static readonly bool[] LeafRight = { false, true, true, false, true, false, true, false };
-        static readonly double[] LeafLen = { 4, 4, 10, 11, 11, 10, 8, 6 };
-
-        static readonly string[] BudSmall = { ".LM.", ".MD.", "gMDG", ".gG." };
-        static readonly string[] BudBig = { "..LM..", ".LMMD.", ".LMMD.", "gLMDDG", ".gMDG.", "..gG.." };
-
-        static int StemOffset(int k, double sway)
-        {
-            double u = k / (double)MaxStem;
-            return (int)Math.Round(1.4 * Math.Sin(u * Math.PI * 1.3) + sway * Math.Pow(u, 1.5));
-        }
-
-        // Draws the plant at growth p (0 = seed, 1 = in bloom).
-        // sx is the left column of the 2px stem, soilY the soil row it grows from.
-        public static void DrawPlant(Canvas c, int sx, int soilY, double p, Flower f, double time, bool animate)
-        {
-            if (p <= 0) { DrawSeed(c, sx, soilY); return; }
-
-            double g = Math.Min(1, p / 0.85);
-            int h = Math.Max(2, (int)Math.Round(MaxStem * (1 - Math.Pow(1 - g, 1.4))));
-            double sway = animate ? 1.6 * Math.Sin(time * 1.8) : 0;
-
-            for (int k = 0; k < h; k++)
-            {
-                int x = sx + StemOffset(k, sway);
-                c.Set(x, soilY - k, Pal.Teal);
-                c.Set(x + 1, soilY - k, Pal.Green);
-            }
-
-            for (int i = 0; i < LeafAt.Length; i++)
-            {
-                int grow = h - LeafAt[i];
-                if (grow < 1) continue;
-                double len = Math.Min(LeafLen[i], 1.5 + grow * 0.55);
-                int x = sx + StemOffset(LeafAt[i], sway);
-                double y = soilY - LeafAt[i] + 0.5;
-                if (LeafRight[i]) DrawLeaf(c, x + 2, y, len, true);
-                else DrawLeaf(c, x, y, len, false);
-            }
-
-            int topX = sx + StemOffset(h - 1, sway), topY = soilY - h + 1;
-            if (p < 0.85)
-            {
-                c.Set(topX + 1, topY, Pal.Lime); // fresh growing tip
-                return;
-            }
-
-            int[] budCols = { f.Light, f.Main, f.Dark, Pal.Teal, Pal.Green };
-            double q = (p - 0.85) / 0.15;
-            if (p >= 1) DrawBloom(c, topX + 1, topY - 6.5, 8, f);
-            else if (q < 0.35) c.Sprite(BudSmall, topX - 1, topY - 3, "LMDgG", budCols);
-            else if (q < 0.7) c.Sprite(BudBig, topX - 2, topY - 5, "LMDgG", budCols);
-            else
-            {
-                double r = 4.5 + (q - 0.7) / 0.3 * 3;
-                DrawBloom(c, topX + 1, topY - r + 1.5, r, f);
-            }
-        }
+        public static readonly string[] BudSmall = { ".LM.", ".MD.", "gMDG", ".gG." };
+        public static readonly string[] BudBig = { "..LM..", ".LMMD.", ".LMMD.", "gLMDDG", ".gMDG.", "..gG.." };
 
         // Curved leaf growing from (ax, ay) up and away from the stem.
-        static void DrawLeaf(Canvas c, double ax, double ay, double len, bool right)
+        // up is the angle above horizontal: 0.55 is about 30 degrees.
+        public static void DrawLeaf(Canvas c, double ax, double ay, double len, bool right, double up = 0.55)
         {
-            const double Up = 0.55; // about 30 degrees
+            double Up = up;
             double side = right ? 1 : -1;
             double dx = Math.Cos(Up) * side, dy = -Math.Sin(Up);
             double nx = Math.Sin(Up) * side, ny = Math.Cos(Up); // perpendicular, pointing down
@@ -278,7 +210,7 @@ namespace PomodoroGarden
 
         static readonly string[] Seed = { ".CW.", "CWWl", "WWlD" };
 
-        static void DrawSeed(Canvas c, int sx, int soilY)
+        public static void DrawSeed(Canvas c, int sx, int soilY)
         {
             c.Sprite(Seed, sx - 1, soilY - 2, "CWlD", new[] { Pal.Cream, Pal.WoodLight, Pal.Wood, Pal.WoodDark });
         }
@@ -366,13 +298,6 @@ namespace PomodoroGarden
                 c.HLine(bx + bw - 4, y + r, 3, Pal.PotDark);
             }
             c.HLine(x + 5, y + 17, 16, Pal.Ink);
-        }
-
-        // Tiny potted flower for the "today's garden" shelf, 7x11.
-        public static void DrawMiniPlant(Canvas c, int x, int y, Flower f)
-        {
-            c.Sprite(MiniPlant, x, y, "fFdygGLQPp", new[] {
-                f.Light, f.Main, f.Dark, f.Center, Pal.Teal, Pal.Green, Pal.Lime, Pal.PotLight, Pal.Pot, Pal.PotDark });
         }
 
         // Vertical gradient with 2x2 ordered dithering between the colour bands.

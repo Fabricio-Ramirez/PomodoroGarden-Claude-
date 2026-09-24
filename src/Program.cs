@@ -8,8 +8,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("A pixel-art pomodoro timer that grows a plant while you focus.")]
 [assembly: AssemblyProduct("Pomodoro Garden")]
 [assembly: AssemblyCopyright("2026")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.0")]
 
 namespace PomodoroGarden
 {

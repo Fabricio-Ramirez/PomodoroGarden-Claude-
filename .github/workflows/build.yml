@@ -22,7 +22,7 @@ jobs:
         shell: cmd
         run: build.cmd
 
-      - name: Run the timer-rules test
+      - name: Run the tests
         shell: cmd
         run: |
           set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
@@ -53,5 +53,6 @@ jobs:
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
+          name: Pomodoro Garden ${{ github.ref_name }}
           files: PomodoroGarden.exe
           generate_release_notes: true

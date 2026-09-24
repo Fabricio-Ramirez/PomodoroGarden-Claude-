@@ -17,6 +17,8 @@ namespace PomodoroGarden
         void Minimize();
         void Quit();
         void Alert();
+        bool SpotifyInstalled { get; }
+        bool Open(string target); // opens a link with its app; false if that failed
     }
 
     // A clickable / hoverable rectangle, registered while a frame is drawn.
@@ -46,11 +48,14 @@ namespace PomodoroGarden
         double remaining;             // seconds left while idle or paused
         DateTime endUtc;              // when the running timer reaches zero
         public int RoundsDone;        // focus rounds finished in the current cycle
-        public int FlowerIndex;       // colour of the plant being grown
+        public int PlantCode = -1;    // the plant being grown (see Plants.Code), -1 before the first one
         public double BreakPlant;     // growth shown in the pot during a break (1 = in bloom)
         public bool InSettings;
+        public int SettingsTab;       // 0 = timer, 1 = look
         public double Now;            // animation clock, seconds
         public double SwitchTime = -100;
+        string toast;                 // short message shown in the hint line, e.g. after opening Spotify
+        double toastUntil;
 
         readonly List<HotSpot> hots = new List<HotSpot>();
         public string HoverId;
@@ -113,15 +118,52 @@ namespace PomodoroGarden
             Mode = m;
             Total = remaining = Minutes(m) * 60.0;
             State = RunState.Idle;
-            if (m == Mode.Focus) PickFlower();
+            if (m == Mode.Focus) PickPlant();
         }
 
-        void PickFlower()
+        public Theme T { get { return Cfg.Dark ? Theme.Dark : Theme.Classic; } }
+
+        // The chosen plant in a random colour, or with "surprise me" a different plant each round.
+        void PickPlant()
         {
-            int n = Art.Flowers.Length, next;
-            do next = rng.Next(n); while (next == FlowerIndex && n > 1);
-            FlowerIndex = next;
+            int species = Cfg.Plant;
+            if (species < 0 || species >= Plants.Count)
+            {
+                int prev = PlantCode >= 0 ? Plants.SpeciesOf(PlantCode) : -1;
+                do species = rng.Next(Plants.Count); while (species == prev);
+            }
+            int n = Plants.ColoursOf(species), next, tries = 0;
+            do next = Plants.Code(species, rng.Next(n)); while (next == PlantCode && n > 1 && tries++ < 20);
+            PlantCode = next;
         }
+
+        // Picking a plant in settings swaps the one in the pot, unless it's already grown (break time).
+        void ChoosePlant(int choice)
+        {
+            Cfg.Plant = choice;
+            if (Mode == Mode.Focus) PickPlant();
+        }
+
+        void OpenSpotify()
+        {
+            string target = Spotify.Target(Cfg.Spotify, host.SpotifyInstalled);
+            bool ok = host.Open(target);
+            bool inApp = target.StartsWith("spotify:");
+            if (!ok && inApp)
+            {
+                inApp = false;
+                ok = host.Open(Spotify.Target(Cfg.Spotify, false));
+            }
+            ShowToast(!ok ? "COULD NOT OPEN SPOTIFY" : inApp ? "OPENING SPOTIFY..." : "OPENING SPOTIFY IN BROWSER");
+        }
+
+        void ShowToast(string text)
+        {
+            toast = text;
+            toastUntil = Now + 3;
+        }
+
+        public string Toast { get { return toast != null && Now < toastUntil ? toast : null; } }
 
         void Start()
         {
@@ -170,7 +212,7 @@ namespace PomodoroGarden
             SwitchTime = Now;
             if (Mode == Mode.Focus)
             {
-                Cfg.Garden.Add(FlowerIndex);
+                Cfg.Garden.Add(PlantCode);
                 RoundsDone++;
                 BreakPlant = 1;
                 if (Cfg.Sound) Chiptune.Bloom();
@@ -233,6 +275,7 @@ namespace PomodoroGarden
         {
             InSettings = !InSettings;
             if (!InSettings) Cfg.Save();
+            else SettingsTab = 0;
         }
 
         void TogglePin()
@@ -328,6 +371,7 @@ namespace PomodoroGarden
         {
             if (k == Keys.Space && !InSettings) { StartPause(); return true; }
             if ((k == Keys.Escape || k == Keys.Enter) && InSettings) { ToggleSettings(); return true; }
+            if ((k == Keys.Left || k == Keys.Right) && InSettings) { SettingsTab = k == Keys.Left ? 0 : 1; return true; }
             return false;
         }
     }
